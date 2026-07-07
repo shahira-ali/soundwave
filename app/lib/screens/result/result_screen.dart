@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -18,12 +19,6 @@ class ResultScreen extends StatelessWidget {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't open link")),
-        );
-      }
     }
   }
 
@@ -32,113 +27,274 @@ class ResultScreen extends StatelessWidget {
     final songProvider = context.watch<SongProvider>();
     final authProvider = context.watch<AuthProvider>();
     final isFav = songProvider.isFavorite(song.id);
+    final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 320,
-            pinned: true,
-            backgroundColor: AppTheme.background,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
+      backgroundColor: AppTheme.background,
+      body: Stack(
+        children: [
+          // Blurred album art background
+          if (song.coverUrl != null)
+            Positioned.fill(
+              child: CachedNetworkImage(
+                imageUrl: song.coverUrl!,
+                fit: BoxFit.cover,
+                color: Colors.black.withValues(alpha: 0.75),
+                colorBlendMode: BlendMode.darken,
+                errorWidget: (_, __, ___) => const SizedBox(),
+              ),
             ),
-            actions: [
-              if (authProvider.isAuthenticated)
-                IconButton(
-                  icon: Icon(
-                    isFav ? Icons.favorite : Icons.favorite_border,
-                    color: isFav ? Colors.redAccent : Colors.white,
-                  ),
-                  onPressed: () => songProvider.toggleFavorite(song),
+
+          // Dark gradient overlay
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppTheme.background.withValues(alpha: 0.3),
+                    AppTheme.background.withValues(alpha: 0.7),
+                    AppTheme.background,
+                    AppTheme.background,
+                  ],
+                  stops: const [0.0, 0.3, 0.55, 1.0],
                 ),
-            ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (song.coverUrl != null)
-                    CachedNetworkImage(
-                      imageUrl: song.coverUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (_, __) => Container(color: AppTheme.cardColor),
-                      errorWidget: (_, __, ___) => Container(color: AppTheme.cardColor,
-                          child: const Icon(Icons.music_note, size: 80, color: AppTheme.primary)),
-                    )
-                  else
-                    Container(
-                      color: AppTheme.cardColor,
-                      child: const Icon(Icons.music_note, size: 80, color: AppTheme.primary),
-                    ),
-                  // Gradient overlay
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, AppTheme.background.withValues(alpha: 0.9)],
-                        stops: const [0.5, 1.0],
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Recognized badge
-                  Row(
+
+          SafeArea(
+            child: Column(
+              children: [
+                // Top bar
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+                  child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [AppTheme.primary, AppTheme.accent]),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_circle, size: 14, color: Colors.white),
-                            SizedBox(width: 4),
-                            Text('Recognized', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
                       ),
+                      const Spacer(),
+                      if (authProvider.isAuthenticated)
+                        GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            songProvider.toggleFavorite(song);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: isFav
+                                  ? Colors.red.withValues(alpha: 0.2)
+                                  : Colors.white.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                              color: isFav ? Colors.redAccent : Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
                     ],
-                  ).animate().fadeIn(delay: 100.ms),
-                  const SizedBox(height: 16),
-                  // Title
-                  Text(
-                    song.title,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
-                  ).animate().fadeIn(delay: 150.ms).slideY(begin: 0.2, end: 0),
-                  const SizedBox(height: 8),
-                  Text(
-                    song.artist,
-                    style: const TextStyle(fontSize: 20, color: AppTheme.primary, fontWeight: FontWeight.w500),
-                  ).animate().fadeIn(delay: 200.ms),
-                  if (song.album != null) ...[
-                    const SizedBox(height: 4),
-                    Text(song.album!, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 16))
-                        .animate().fadeIn(delay: 250.ms),
-                  ],
-                  const SizedBox(height: 32),
-                  // Details grid
-                  _buildDetailsGrid(),
-                  const SizedBox(height: 32),
-                  // Action buttons
-                  const Text('Listen on', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 12),
-                  _buildStreamingButtons(context),
-                  const SizedBox(height: 40),
-                ],
-              ),
+                  ),
+                ),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      children: [
+                        SizedBox(height: size.height * 0.04),
+
+                        // Album art
+                        Hero(
+                          tag: 'album_art_${song.id}',
+                          child: Container(
+                            width: 220,
+                            height: 220,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.primary.withValues(alpha: 0.4),
+                                  blurRadius: 40,
+                                  spreadRadius: 8,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(24),
+                              child: song.coverUrl != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: song.coverUrl!,
+                                      fit: BoxFit.cover,
+                                      placeholder: (_, __) => _artPlaceholder(),
+                                      errorWidget: (_, __, ___) => _artPlaceholder(),
+                                    )
+                                  : _artPlaceholder(),
+                            ),
+                          ),
+                        ).animate().scale(
+                              begin: const Offset(0.7, 0.7),
+                              end: const Offset(1.0, 1.0),
+                              duration: 500.ms,
+                              curve: Curves.elasticOut,
+                            ),
+
+                        const SizedBox(height: 32),
+
+                        // Recognized badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [AppTheme.primary, AppTheme.accent],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_rounded, size: 14, color: Colors.white),
+                              SizedBox(width: 6),
+                              Text(
+                                'RECOGNIZED',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ).animate().fadeIn(delay: 200.ms),
+
+                        const SizedBox(height: 20),
+
+                        // Song title
+                        Text(
+                          song.title,
+                          style: const TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            height: 1.1,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ).animate().fadeIn(delay: 250.ms).slideY(begin: 0.3, end: 0),
+
+                        const SizedBox(height: 10),
+
+                        // Artist
+                        Text(
+                          song.artist,
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: AppTheme.accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          textAlign: TextAlign.center,
+                        ).animate().fadeIn(delay: 300.ms),
+
+                        if (song.album != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            song.album!,
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 15,
+                            ),
+                            textAlign: TextAlign.center,
+                          ).animate().fadeIn(delay: 350.ms),
+                        ],
+
+                        const SizedBox(height: 32),
+
+                        // Details chips
+                        if (song.releaseDate != null || song.genre != null)
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              if (song.releaseDate != null)
+                                _chip(Icons.calendar_today_rounded, song.releaseDate!),
+                              if (song.genre != null)
+                                _chip(Icons.music_note_rounded, song.genre!),
+                            ],
+                          ).animate().fadeIn(delay: 400.ms),
+
+                        const SizedBox(height: 32),
+
+                        // Streaming section
+                        if (song.spotifyUrl != null || song.appleMusicUrl != null) ...[
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'LISTEN ON',
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          if (song.spotifyUrl != null)
+                            _StreamButton(
+                              label: 'Spotify',
+                              icon: Icons.music_note_rounded,
+                              color: const Color(0xFF1DB954),
+                              onTap: () => _openUrl(song.spotifyUrl, context),
+                            ).animate().fadeIn(delay: 450.ms).slideX(begin: -0.2, end: 0),
+                          if (song.appleMusicUrl != null) ...[
+                            const SizedBox(height: 12),
+                            _StreamButton(
+                              label: 'Apple Music',
+                              icon: Icons.apple_rounded,
+                              color: const Color(0xFFFC3C44),
+                              onTap: () => _openUrl(song.appleMusicUrl, context),
+                            ).animate().fadeIn(delay: 500.ms).slideX(begin: -0.2, end: 0),
+                          ],
+                        ],
+
+                        const SizedBox(height: 32),
+
+                        // Recognize again button
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.graphic_eq_rounded),
+                            label: const Text('Recognize Another'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.primary,
+                              side: BorderSide(
+                                color: AppTheme.primary.withValues(alpha: 0.5),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                        ).animate().fadeIn(delay: 550.ms),
+
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -146,66 +302,45 @@ class ResultScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailsGrid() {
-    final details = <Map<String, String>>[];
-    if (song.releaseDate != null) details.add({'label': 'Released', 'value': song.releaseDate!});
-    if (song.genre != null) details.add({'label': 'Genre', 'value': song.genre!});
-
-    if (details.isEmpty) return const SizedBox.shrink();
-
+  Widget _artPlaceholder() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: details.map((d) => Expanded(
-          child: Column(
-            children: [
-              Text(d['label']!, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-              const SizedBox(height: 4),
-              Text(d['value']!, style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600)),
-            ],
-          ),
-        )).toList(),
-      ),
-    ).animate().fadeIn(delay: 300.ms);
+      color: AppTheme.cardColor,
+      child: const Icon(Icons.music_note_rounded, size: 80, color: AppTheme.primary),
+    );
   }
 
-  Widget _buildStreamingButtons(BuildContext context) {
-    return Column(
-      children: [
-        if (song.spotifyUrl != null)
-          _StreamingButton(
-            label: 'Spotify',
-            icon: Icons.music_note,
-            color: const Color(0xFF1DB954),
-            onTap: () => _openUrl(song.spotifyUrl, context),
-          ),
-        if (song.appleMusicUrl != null) ...[
-          const SizedBox(height: 10),
-          _StreamingButton(
-            label: 'Apple Music',
-            icon: Icons.apple,
-            color: const Color(0xFFFC3C44),
-            onTap: () => _openUrl(song.appleMusicUrl, context),
-          ),
+  Widget _chip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: AppTheme.primary),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
         ],
-        if (song.spotifyUrl == null && song.appleMusicUrl == null)
-          const Text('No streaming links available', style: TextStyle(color: AppTheme.textSecondary)),
-      ],
-    ).animate().fadeIn(delay: 350.ms);
+      ),
+    );
   }
 }
 
-class _StreamingButton extends StatelessWidget {
+class _StreamButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
 
-  const _StreamingButton({required this.label, required this.icon, required this.color, required this.onTap});
+  const _StreamButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -213,18 +348,34 @@ class _StreamingButton extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.4)),
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.35), width: 1.5),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 10),
-            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 15)),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+            const Spacer(),
+            Icon(Icons.arrow_forward_ios_rounded, color: color.withValues(alpha: 0.7), size: 14),
           ],
         ),
       ),

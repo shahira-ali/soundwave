@@ -3,6 +3,9 @@ class AppConstants {
   // For Android emulator use: http://10.0.2.2:3000
   // For iOS simulator use: http://localhost:3000
   // For physical device use your machine's local IP: http://192.168.x.x:3000
+  // Android emulator: http://10.0.2.2:3000/api
+  // Web/Chrome: http://localhost:3000/api
+  // Physical device: http://YOUR-PC-IP:3000/api
   static const String baseUrl = 'http://10.0.2.2:3000/api';
 
   static const String authToken = 'auth_token';
